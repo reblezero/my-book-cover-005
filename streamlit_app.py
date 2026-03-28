@@ -10,12 +10,12 @@ from datetime import datetime
 
 warnings.filterwarnings('ignore')
 
-# --- 설정값 ---
-TARGET_HEIGHT_PX = 400  # JPG 출력 품질을 위해 픽셀 단위로 설정
-GAP_PX = 10             # 이미지 사이의 간격
-CANVAS_WIDTH_PX = 1200  # 결과 이미지의 가로 폭
+# --- 설정값 (JPG 품질 및 레이아웃) ---
+TARGET_HEIGHT_PX = 400  # 이미지 개별 높이
+GAP_PX = 10             # 이미지 사이 간격
+CANVAS_WIDTH_PX = 1200  # 결과물 전체 가로 폭
 
-# --- 핵심 기능: 알라딘에서 고화질 표지 가져오기 ---
+# --- 핵심 기능: 알라딘에서 고화질 표지 수집 ---
 def get_high_res_cover(book_title):
     try:
         encoded_title = urllib.parse.quote(book_title)
@@ -48,11 +48,11 @@ def get_high_res_cover(book_title):
 # --- 웹 화면(UI) 구성 ---
 st.set_page_config(page_title="알라딘 JPG 메이커", page_icon="🖼️")
 st.title("📚 알라딘 책 표지 JPG 수집기")
-st.markdown("제목을 입력하면 표지들을 모아 **하나의 JPG 이미지**로 만들어줍니다!")
+st.markdown("책 제목들을 입력하면 하나의 **JPG 이미지**로 합쳐서 내려받을 수 있습니다!")
 
-titles_input = st.text_area("책 제목 (한 줄에 하나씩):", height=150, placeholder="구름 사람들\n파친코")
+titles_input = st.text_area("책 제목을 한 줄에 하나씩 입력하세요:", height=150, placeholder="구름 사람들\n파친코\n불편한 편의점")
 
-if st.button("🚀 JPG 이미지 만들기"):
+if st.button("🚀 JPG 이미지 생성 시작!"):
     titles = [t.strip() for t in titles_input.split('\n') if t.strip()]
     if not titles:
         st.warning("제목을 입력해주세요!")
@@ -64,16 +64,16 @@ if st.button("🚀 JPG 이미지 만들기"):
             status_text.text(f"'{t}' 찾는 중... ({i+1}/{len(titles)})")
             img = get_high_res_cover(t)
             if img: images.append(img)
+            else: st.toast(f"'{t}' 찾기 실패 ❌")
             progress_bar.progress((i + 1) / len(titles))
             
         if images:
             status_text.text("이미지 합성 중...")
             
-            # 레이아웃 계산 (여러 장을 한 장의 캔버스에 배치)
+            # 가로 폭에 맞춰 줄바꿈 계산
             rows = []
             current_row = []
             current_row_width = 0
-            
             for img in images:
                 if current_row_width + img.width + GAP_PX > CANVAS_WIDTH_PX:
                     rows.append(current_row)
@@ -84,11 +84,11 @@ if st.button("🚀 JPG 이미지 만들기"):
                     current_row_width += img.width + GAP_PX
             rows.append(current_row)
             
-            # 최종 캔버스 높이 계산
+            # 캔버스 생성 (흰색 배경)
             final_height = len(rows) * (TARGET_HEIGHT_PX + GAP_PX) + GAP_PX
             canvas = Image.new('RGB', (CANVAS_WIDTH_PX, final_height), (255, 255, 255))
             
-            # 이미지 그리기
+            # 이미지 붙여넣기
             curr_y = GAP_PX
             for row in rows:
                 curr_x = GAP_PX
@@ -97,19 +97,19 @@ if st.button("🚀 JPG 이미지 만들기"):
                     curr_x += img.width + GAP_PX
                 curr_y += TARGET_HEIGHT_PX + GAP_PX
             
-            # 결과물을 바이트로 변환
+            # JPG 데이터로 변환
             buf = BytesIO()
-            canvas.save(buf, format="JPEG", quality=90)
+            canvas.save(buf, format="JPEG", quality=95)
             byte_im = buf.getvalue()
             
-            st.image(canvas, caption="미리보기 (이 이미지가 저장됩니다)", use_container_width=True)
-            st.success("✅ 이미지 합성이 완료되었습니다!")
+            st.image(canvas, caption="생성된 이미지 미리보기", use_container_width=True)
+            st.success("✅ 모든 이미지가 합쳐졌습니다!")
             
             st.download_button(
-                label="📥 JPG 이미지 다운로드",
+                label="📥 합성된 JPG 다운로드",
                 data=byte_im,
-                file_name=f"book_covers_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg",
+                file_name=f"covers_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg",
                 mime="image/jpeg"
             )
         else:
-            st.error("이미지를 찾지 못했습니다.")
+            st.error("이미지를 한 장도 찾지 못했습니다.")
